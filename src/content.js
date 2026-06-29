@@ -9,7 +9,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "FILL_SAFE_ANSWERS") {
-    handleFillSafeAnswers(message, sendResponse);
+    handleFillAnswers(message, "safe", sendResponse);
+    return true;
+  }
+
+  if (message.type === "FILL_ALL_PREVIEWED") {
+    handleFillAnswers(message, "all", sendResponse);
+    return true;
+  }
+
+  if (message.type === "PREVIEW_ANSWERS_ON_FORM") {
+    handlePreviewAnswersOnForm(message, sendResponse);
+    return true;
+  }
+
+  if (message.type === "CLEAR_FORM_HIGHLIGHTS") {
+    handleClearFormHighlights(sendResponse);
     return true;
   }
 
@@ -37,13 +52,14 @@ async function handleAnalyzeForm(sendResponse) {
   }
 }
 
-async function handleFillSafeAnswers(message, sendResponse) {
+async function handleFillAnswers(message, mode, sendResponse) {
   try {
     if (!window.LocalAIFormFiller) {
       throw new Error("Form filler is not loaded.");
     }
 
-    const result = await window.LocalAIFormFiller.fillSafeAnswers({
+    const method = mode === "all" ? "fillAllPreviewed" : "fillSafeAnswers";
+    const result = await window.LocalAIFormFiller[method]({
       answers: message.answers || [],
       questions: message.questions || []
     });
@@ -53,10 +69,47 @@ async function handleFillSafeAnswers(message, sendResponse) {
       result
     });
   } catch (error) {
-    console.error("Fill safe answers failed:", error);
+    console.error("Fill answers failed:", error);
     sendResponse({
       ok: false,
-      error: error?.message || "Failed to fill safe answers."
+      error: error?.message || "Failed to fill answers."
+    });
+  }
+}
+
+function handlePreviewAnswersOnForm(message, sendResponse) {
+  try {
+    if (!window.LocalAIFormFiller) {
+      throw new Error("Form filler is not loaded.");
+    }
+
+    const result = window.LocalAIFormFiller.previewAnswersOnForm({
+      answers: message.payload?.answers || [],
+      questions: message.payload?.questions || []
+    });
+
+    sendResponse({
+      ok: true,
+      result
+    });
+  } catch (error) {
+    console.error("Preview answers on form failed:", error);
+    sendResponse({
+      ok: false,
+      error: error?.message || "Failed to preview answers on form."
+    });
+  }
+}
+
+function handleClearFormHighlights(sendResponse) {
+  try {
+    window.LocalAIFormFiller?.clearFormHighlights?.();
+    sendResponse({ ok: true });
+  } catch (error) {
+    console.error("Clear form highlights failed:", error);
+    sendResponse({
+      ok: false,
+      error: error?.message || "Failed to clear form highlights."
     });
   }
 }

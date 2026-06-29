@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <main class="app-shell">
-      <header class="app-header">
+    <main class="app-shell app">
+      <header class="app-header header">
         <div>
           <h1>AI Form Filler</h1>
           <p>Local AI assistant for Google Forms</p>
@@ -16,205 +16,211 @@
         <span class="header-dot" aria-hidden="true"></span>
       </header>
 
-      <section class="panel">
-        <div class="section-heading">
-          <h2>Profile</h2>
-          <span class="section-note">Saved locally</span>
-        </div>
-
-        <div class="field-grid two">
-          <label class="field">
-            <span>First name</span>
-            <input id="firstName" type="text" autocomplete="given-name">
-          </label>
-          <label class="field">
-            <span>Last name</span>
-            <input id="lastName" type="text" autocomplete="family-name">
-          </label>
-        </div>
-
-        <div class="field-grid two">
-          <label class="field">
-            <span>Email</span>
-            <input id="email" type="email" autocomplete="email">
-          </label>
-          <label class="field">
-            <span>Phone</span>
-            <input id="phone" type="tel" autocomplete="tel">
-          </label>
-        </div>
-
-        <div class="field-grid three">
-          <label class="field">
-            <span>City</span>
-            <input id="city" type="text" autocomplete="address-level2">
-          </label>
-          <label class="field">
-            <span>Country</span>
-            <input id="country" type="text" autocomplete="country-name">
-          </label>
-          <label class="field">
-            <span>Age optional</span>
-            <input id="age" type="text" inputmode="numeric">
-          </label>
-        </div>
-
-        <label class="field">
-          <span>Occupation / Role</span>
-          <input id="occupation" type="text">
-        </label>
-
-        <label class="field">
-          <span>University / Company</span>
-          <input id="universityOrCompany" type="text">
-        </label>
-
-        <label class="field">
-          <span>Education</span>
-          <textarea id="education" rows="2"></textarea>
-        </label>
-
-        <label class="field">
-          <span>Skills</span>
-          <textarea id="skills" rows="2"></textarea>
-        </label>
-
-        <label class="field">
-          <span>Experience</span>
-          <textarea id="experience" rows="3"></textarea>
-        </label>
-
-        <label class="field">
-          <span>Languages</span>
-          <input id="languages" type="text">
-        </label>
-
-        <label class="field">
-          <span>Short bio</span>
-          <textarea id="shortBio" rows="3"></textarea>
-        </label>
-
-        <label class="field">
-          <span>Motivation / About me</span>
-          <textarea id="motivation" rows="3"></textarea>
-        </label>
-      </section>
-
-      <section class="panel">
-        <div class="section-heading">
-          <h2>Answer Style</h2>
-          <span class="section-note">Applied to AI output</span>
-        </div>
-
-        <label class="field">
-          <span>Preferred language</span>
-          <select id="preferredLanguage">
-            <option value="Auto">Auto</option>
-            <option value="Russian">Russian</option>
-            <option value="English">English</option>
-            <option value="Kazakh">Kazakh</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Tone</span>
-          <select id="tone">
-            <option value="Professional">Professional</option>
-            <option value="Friendly">Friendly</option>
-            <option value="Short and clear">Short and clear</option>
-            <option value="Detailed">Detailed</option>
-            <option value="Student style">Student style</option>
-          </select>
-        </label>
-      </section>
-
-      <section class="panel">
-        <div class="section-heading">
-          <h2>Optional for AI</h2>
-          <span class="section-note">Never required</span>
-        </div>
-
-        <label class="field">
-          <span>Optional AI instructions</span>
-          <textarea
-            id="optionalInstructions"
-            rows="4"
-            placeholder="Например: отвечай как студент LLM Engineer, не придумывай опыт, делай ответы короткими, если вопрос непонятен — оставь пустым."
-          ></textarea>
-        </label>
-      </section>
-
-      <section class="panel">
-        <div class="section-heading">
-          <h2>Actions</h2>
-          <span id="activePageLabel" class="section-note">Waiting for form</span>
-        </div>
-
-        <div class="action-grid">
-          <button id="saveProfileBtn" class="button primary" type="button">
-            <span>Save Profile</span>
-          </button>
-          <button id="analyzeBtn" class="button secondary" type="button">
-            <span>Analyze Form</span>
-          </button>
-          <button id="generateBtn" class="button secondary" type="button">
-            <span>Generate Answers</span>
-          </button>
-          <button id="previewBtn" class="button secondary" type="button">
-            <span>Preview Answers</span>
-          </button>
-          <button id="fillBtn" class="button primary" type="button">
-            <span>Fill Safe Answers</span>
-          </button>
-          <button id="clearBtn" class="button ghost" type="button">
-            <span>Clear Draft</span>
-          </button>
-        </div>
-      </section>
-
-      <section class="panel status-panel">
-        <div class="section-heading">
-          <h2>Status</h2>
-          <span id="busyIndicator" class="spinner hidden" aria-label="Loading"></span>
-        </div>
-
-        <dl class="status-list">
-          <div>
-            <dt>Form status</dt>
-            <dd id="formStatus">Not analyzed</dd>
+      <div class="content">
+        <section class="panel card">
+          <div class="section-heading">
+            <h2>Profile</h2>
+            <span class="section-note">Saved locally</span>
           </div>
-          <div>
-            <dt>Questions found</dt>
-            <dd id="questionsFound">0</dd>
-          </div>
-          <div>
-            <dt>AI status</dt>
-            <dd id="aiStatus">Idle</dd>
-          </div>
-          <div>
-            <dt>Fill status</dt>
-            <dd id="fillStatus">Not filled</dd>
-          </div>
-        </dl>
-      </section>
 
-      <section id="previewSection" class="panel preview-panel">
-        <div class="section-heading">
-          <h2>Preview</h2>
-          <div class="preview-heading-actions">
-            <button id="rawToggleBtn" class="raw-toggle hidden" type="button">Show raw AI response</button>
-            <span id="previewCount" class="section-note">No answers</span>
+          <div class="field-grid two">
+            <label class="field">
+              <span>First name</span>
+              <input id="firstName" type="text" autocomplete="given-name">
+            </label>
+            <label class="field">
+              <span>Last name</span>
+              <input id="lastName" type="text" autocomplete="family-name">
+            </label>
           </div>
-        </div>
 
-        <div id="warnings" class="warnings hidden"></div>
-        <textarea id="rawResponsePanel" class="raw-response hidden" readonly spellcheck="false"></textarea>
-        <div id="previewList" class="preview-list">
-          <div class="empty-state">
-            Generated answers will appear here before anything is filled.
+          <div class="field-grid two">
+            <label class="field">
+              <span>Email</span>
+              <input id="email" type="email" autocomplete="email">
+            </label>
+            <label class="field">
+              <span>Phone</span>
+              <input id="phone" type="tel" autocomplete="tel">
+            </label>
           </div>
-        </div>
-      </section>
+
+          <div class="field-grid three">
+            <label class="field">
+              <span>City</span>
+              <input id="city" type="text" autocomplete="address-level2">
+            </label>
+            <label class="field">
+              <span>Country</span>
+              <input id="country" type="text" autocomplete="country-name">
+            </label>
+            <label class="field">
+              <span>Age optional</span>
+              <input id="age" type="text" inputmode="numeric">
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Occupation / Role</span>
+            <input id="occupation" type="text">
+          </label>
+
+          <label class="field">
+            <span>University / Company</span>
+            <input id="universityOrCompany" type="text">
+          </label>
+
+          <label class="field">
+            <span>Education</span>
+            <textarea id="education" rows="2"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Skills</span>
+            <textarea id="skills" rows="2"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Experience</span>
+            <textarea id="experience" rows="3"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Languages</span>
+            <input id="languages" type="text">
+          </label>
+
+          <label class="field">
+            <span>Short bio</span>
+            <textarea id="shortBio" rows="3"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Motivation / About me</span>
+            <textarea id="motivation" rows="3"></textarea>
+          </label>
+        </section>
+
+        <section class="panel card">
+          <div class="section-heading">
+            <h2>Answer Style</h2>
+            <span class="section-note">Applied to AI output</span>
+          </div>
+
+          <label class="field">
+            <span>Preferred language</span>
+            <select id="preferredLanguage">
+              <option value="Auto">Auto</option>
+              <option value="Russian">Russian</option>
+              <option value="English">English</option>
+              <option value="Kazakh">Kazakh</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Tone</span>
+            <select id="tone">
+              <option value="Professional">Professional</option>
+              <option value="Friendly">Friendly</option>
+              <option value="Short and clear">Short and clear</option>
+              <option value="Detailed">Detailed</option>
+              <option value="Student style">Student style</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="panel card">
+          <div class="section-heading">
+            <h2>Optional for AI</h2>
+            <span class="section-note">Never required</span>
+          </div>
+
+          <label class="field">
+            <span>Optional AI instructions</span>
+            <textarea
+              id="optionalInstructions"
+              rows="4"
+              placeholder="Например: отвечай как студент LLM Engineer, не придумывай опыт, делай ответы короткими, если вопрос непонятен — оставь пустым."
+            ></textarea>
+          </label>
+        </section>
+
+        <section class="panel card">
+          <div class="section-heading">
+            <h2>Actions</h2>
+            <span id="activePageLabel" class="section-note">Waiting for form</span>
+          </div>
+
+          <div class="action-grid actions-grid">
+            <button id="saveProfileBtn" class="button primary" type="button">
+              <span>Save Profile</span>
+            </button>
+            <button id="analyzeBtn" class="button secondary" type="button">
+              <span>Analyze Form</span>
+            </button>
+            <button id="generateBtn" class="button secondary" type="button">
+              <span>Generate Answers</span>
+            </button>
+            <button id="previewBtn" class="button secondary" type="button">
+              <span>Preview Answers</span>
+            </button>
+            <button id="fillBtn" class="button primary" type="button">
+              <span>Fill Safe Answers</span>
+            </button>
+            <button id="fillAllBtn" class="button secondary" type="button">
+              <span>Fill All Previewed</span>
+            </button>
+            <button id="clearBtn" class="button ghost span-2" type="button">
+              <span>Clear Draft</span>
+            </button>
+          </div>
+          <p class="action-help">Safe mode fills only high-confidence answers. All Previewed fills every non-sensitive answer visible in preview.</p>
+        </section>
+
+        <section class="panel card status-panel">
+          <div class="section-heading">
+            <h2>Status</h2>
+            <span id="busyIndicator" class="spinner hidden" aria-label="Loading"></span>
+          </div>
+
+          <dl class="status-list status-grid">
+            <div>
+              <dt>Form status</dt>
+              <dd id="formStatus">Not analyzed</dd>
+            </div>
+            <div>
+              <dt>Questions found</dt>
+              <dd id="questionsFound">0</dd>
+            </div>
+            <div>
+              <dt>AI status</dt>
+              <dd id="aiStatus">Idle</dd>
+            </div>
+            <div>
+              <dt>Fill status</dt>
+              <dd id="fillStatus">Not filled</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section id="previewSection" class="panel card preview-panel">
+          <div class="section-heading">
+            <h2>Preview</h2>
+            <div class="preview-heading-actions">
+              <button id="rawToggleBtn" class="raw-toggle hidden" type="button">Show raw AI response</button>
+              <span id="previewCount" class="section-note">No answers</span>
+            </div>
+          </div>
+
+          <div id="warnings" class="warnings hidden"></div>
+          <textarea id="rawResponsePanel" class="raw-response hidden" readonly spellcheck="false"></textarea>
+          <div id="previewList" class="preview-list">
+            <div class="empty-state">
+              Generated answers will appear here before anything is filled.
+            </div>
+          </div>
+        </section>
+      </div>
     </main>
 
     <div id="toastRoot" class="toast-root" aria-live="polite"></div>

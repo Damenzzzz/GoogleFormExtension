@@ -82,6 +82,21 @@ The extension is intentionally conservative:
 - It fills only answers with `safeToFill: true`, non-sensitive questions, confidence `>= 0.6`, and non-empty answers.
 - It previews every generated answer before filling.
 
+## Editing Answers Before Fill
+
+1. Generate answers.
+2. Review cards in Preview.
+3. Edit any answer manually.
+4. Preview highlights update on the Google Form.
+5. Click Fill Safe Answers or Fill All Previewed.
+
+Manual edits are saved into the current draft. Manually edited answers are treated as user-approved non-sensitive preview answers.
+
+## Fill Modes
+
+- Safe Answers: fills only high-confidence safe answers.
+- All Previewed: fills all non-sensitive answers currently visible in preview, including manually edited and random survey answers.
+
 ## Troubleshooting
 
 After changing `src/localConfig.js`, `src/apiClient.js`, `src/background.js`, or `manifest.json`:
@@ -122,6 +137,17 @@ If AI returns invalid JSON:
 - The popup shows `Show raw AI response` in the Preview section.
 - Open it to inspect the raw model output.
 - Adjust optional instructions to ask for strict JSON only.
+
+If answers are not filled:
+
+- Open the extension service worker console and check warnings.
+- Refresh the Google Form page after reloading the extension.
+- Run Analyze Form again, then Generate Answers again.
+
+If `src/localConfig.js` changed:
+
+- Reload the extension in `chrome://extensions`.
+- Reopen the popup so the module service worker uses the new local config.
 
 ## File Structure
 

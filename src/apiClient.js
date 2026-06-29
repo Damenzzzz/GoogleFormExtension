@@ -1,11 +1,12 @@
 import { LOCAL_AI_CONFIG } from "./localConfig.js";
 
 const REQUEST_TIMEOUT_MS = 60000;
+const CHOICE_TYPES = new Set(["radio", "checkbox", "select", "scale"]);
 
 const SYSTEM_PROMPT = `
 You are an AI assistant for filling Google Forms.
 
-You must return ONLY valid JSON.
+Return ONLY valid JSON.
 No markdown.
 No explanations outside JSON.
 No code fences.
@@ -17,7 +18,7 @@ Expected JSON schema:
       "questionId": "q_1",
       "questionText": "Question text",
       "type": "text | textarea | radio | checkbox | select | scale | date | unknown",
-      "answer": "answer text or option value",
+      "answer": "answer text or selected option",
       "confidence": 0.0,
       "reason": "short reason",
       "safeToFill": true
@@ -27,14 +28,22 @@ Expected JSON schema:
 }
 
 Rules:
-- Use only user profile, form questions, provided options, and optional instructions.
-- Do not invent important personal facts.
-- If you do not know the answer, use an empty string and safeToFill false.
-- For radio, checkbox, select, and scale questions, choose only from provided options.
-- If optional instructions ask to answer randomly, choose random valid options for choice/rating questions.
-- For rating scale questions 1-5 or 1-10, answer with one of the available numeric options.
-- Do not answer sensitive questions: passwords, card data, CVV, passport, IIN, banking details, exact private address.
-- Return answers for every questionId from the input form.
+- Return one answer for every questionId.
+- Use user profile when the question asks about the user.
+- If optional instructions include random / randomly / рандом / рандомно / случайно, enable RANDOM_SURVEY_MODE.
+- In RANDOM_SURVEY_MODE:
+  - For radio/select/scale questions, choose one valid option from provided options.
+  - For checkbox questions, choose 1-3 valid options from provided options.
+  - For rating scale 1-5 or 1-10, choose one available numeric option.
+  - Mark safeToFill true for non-sensitive survey questions.
+  - Use confidence 0.75 for randomly selected safe survey answers.
+  - Reason: "Randomly selected as requested by optional instructions".
+- For text questions with no profile data:
+  - If random mode is on and the question is harmless, provide a short plausible answer.
+  - If not enough data and random mode is off, return empty string and safeToFill false.
+- For choice questions, answer must match one of the provided options exactly.
+- Never answer sensitive questions: passwords, card data, CVV, passport, IIN, banking details, exact private address.
+- Sensitive questions must have answer "", confidence 0, safeToFill false.
 `;
 
 export async function generateAnswersWithAlem(payload) {
@@ -57,14 +66,14 @@ export async function generateAnswersWithAlem(payload) {
   }
 
   try {
-    return parseAndNormalizeAIContent(rawContent);
+    return parseAndNormalizeAIContent(rawContent, payload);
   } catch (firstParseError) {
     console.warn("[AI Form Filler] First JSON parse failed. Trying repair retry.", firstParseError);
 
     const repairedContent = await requestJsonRepair(config, rawContent, payload);
 
     try {
-      return parseAndNormalizeAIContent(repairedContent);
+      return parseAndNormalizeAIContent(repairedContent, payload);
     } catch (secondParseError) {
       throw createUserError(
         "AI returned a response that could not be parsed as the expected JSON. Click Show raw AI response for debugging.",
@@ -102,7 +111,7 @@ async function requestChatCompletion(config, payload, includeResponseFormat) {
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: JSON.stringify(payload) }
     ],
-    temperature: shouldUseRandom(payload) ? 0.9 : 0.2
+    temperature: shouldUseRandom(payload) ? 0.8 : 0.2
   };
 
   if (includeResponseFormat) {
@@ -140,7 +149,7 @@ Required schema:
       "questionId": "q_1",
       "questionText": "Question text",
       "type": "text | textarea | radio | checkbox | select | scale | date | unknown",
-      "answer": "answer text or option value",
+      "answer": "answer text or selected option",
       "confidence": 0.0,
       "reason": "short reason",
       "safeToFill": true
@@ -236,7 +245,7 @@ async function postToChatCompletions(config, body) {
   }
 }
 
-function parseAndNormalizeAIContent(content) {
+function parseAndNormalizeAIContent(content, payload) {
   const parsed = parseJsonObjectFromText(content);
 
   if (!parsed || !Array.isArray(parsed.answers)) {
@@ -245,8 +254,15 @@ function parseAndNormalizeAIContent(content) {
     });
   }
 
+  const randomMode = shouldUseRandom(payload);
+  const questions = Array.isArray(payload?.form?.questions) ? payload.form.questions : [];
+  const answersById = new Map(parsed.answers.map((answer) => [String(answer?.questionId || ""), answer]));
+  const normalizedAnswers = questions.map((question) =>
+    normalizeAnswer(answersById.get(question.id), question, randomMode)
+  );
+
   return {
-    answers: parsed.answers.map(normalizeAnswer),
+    answers: normalizedAnswers,
     warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : []
   };
 }
@@ -279,20 +295,88 @@ function parseJsonObjectFromText(text) {
   });
 }
 
-function normalizeAnswer(answer) {
+function normalizeAnswer(answer, question, randomMode) {
   const confidenceNumber = Number(answer?.confidence);
-
-  return {
-    questionId: String(answer?.questionId || ""),
-    questionText: String(answer?.questionText || ""),
-    type: String(answer?.type || "unknown"),
+  const questionType = String(question?.type || answer?.type || "unknown");
+  const normalized = {
+    questionId: String(question?.id || answer?.questionId || ""),
+    questionText: String(question?.questionText || answer?.questionText || ""),
+    type: questionType,
     answer: normalizeAnswerValue(answer?.answer),
-    confidence: Number.isFinite(confidenceNumber)
-      ? Math.max(0, Math.min(1, confidenceNumber))
-      : 0,
+    confidence: Number.isFinite(confidenceNumber) ? Math.max(0, Math.min(1, confidenceNumber)) : 0,
     reason: String(answer?.reason || ""),
     safeToFill: Boolean(answer?.safeToFill)
   };
+
+  if (!answer) {
+    normalized.reason = "No answer returned by AI";
+    return normalized;
+  }
+
+  if (question?.sensitive) {
+    return {
+      ...normalized,
+      answer: "",
+      confidence: 0,
+      reason: "Sensitive question skipped",
+      safeToFill: false
+    };
+  }
+
+  if (CHOICE_TYPES.has(questionType)) {
+    normalized.answer = coerceChoiceAnswer(normalized.answer, question, questionType);
+
+    if (isEmptyAnswer(normalized.answer)) {
+      normalized.safeToFill = false;
+      normalized.confidence = 0;
+      normalized.reason = normalized.reason || "No matching option selected";
+    }
+  }
+
+  if (randomMode && !question?.sensitive && CHOICE_TYPES.has(questionType) && !isEmptyAnswer(normalized.answer)) {
+    normalized.safeToFill = true;
+    normalized.confidence = Math.max(normalized.confidence || 0, 0.75);
+    normalized.reason = "Randomly selected as requested";
+  }
+
+  return normalized;
+}
+
+function coerceChoiceAnswer(value, question, type) {
+  const options = Array.isArray(question?.options) ? question.options : [];
+
+  if (options.length === 0) {
+    return value;
+  }
+
+  if (type === "checkbox") {
+    const values = Array.isArray(value)
+      ? value
+      : String(value || "")
+          .split(/[,;\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+    return values.map((item) => matchOption(item, options)).filter(Boolean);
+  }
+
+  return matchOption(Array.isArray(value) ? value[0] : value, options) || "";
+}
+
+function matchOption(value, options) {
+  const normalizedValue = normalizeComparable(value);
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  return (
+    options.find((option) => normalizeComparable(option) === normalizedValue) ||
+    options.find((option) => {
+      const normalizedOption = normalizeComparable(option);
+      return normalizedOption.includes(normalizedValue) || normalizedValue.includes(normalizedOption);
+    }) ||
+    ""
+  );
 }
 
 function normalizeAnswerValue(value) {
@@ -307,8 +391,16 @@ function normalizeAnswerValue(value) {
   return String(value).trim();
 }
 
+function isEmptyAnswer(value) {
+  if (Array.isArray(value)) {
+    return value.length === 0 || value.every((item) => !String(item || "").trim());
+  }
+
+  return !String(value || "").trim();
+}
+
 function shouldUseRandom(payload) {
-  return /random|рандом|рандомно|случайн/i.test(payload?.optionalInstructions || "");
+  return /random|randomly|рандом|рандомно|случайн/i.test(payload?.optionalInstructions || "");
 }
 
 function safeJsonParse(text) {
@@ -331,6 +423,14 @@ function extractErrorMessage(responseText) {
   } catch {
     return responseText.slice(0, 400);
   }
+}
+
+function normalizeComparable(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t\r\n]+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function createUserError(message, extra = {}) {

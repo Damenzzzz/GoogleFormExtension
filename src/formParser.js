@@ -45,8 +45,10 @@
         continue;
       }
 
-      const type = detectQuestionType(item, questionText);
-      const options = await extractOptions(item, type);
+      const baseType = detectBaseQuestionType(item, questionText);
+      const rawOptions = await extractOptions(item, baseType);
+      const options = filterOptions(rawOptions, questionText);
+      const type = baseType === "radio" && isNumericScaleOptions(options) ? "scale" : baseType;
       const description = extractDescription(item, questionText, options);
 
       questions.push({
@@ -74,7 +76,7 @@
       ? listItems
       : Array.from(document.querySelectorAll("[data-params], .Qr7Oae"));
 
-    return candidates.filter((item) => isVisible(item) && Boolean(extractQuestionText(item)) && hasQuestionControl(item));
+    return candidates.filter((item) => isVisible(item) && hasQuestionControl(item) && Boolean(extractQuestionText(item)));
   }
 
   function extractFormTitle() {
@@ -140,13 +142,9 @@
     return "";
   }
 
-  function detectQuestionType(item, questionText) {
+  function detectBaseQuestionType(item, questionText) {
     const comparable = normalizeComparable(questionText);
     const inputs = getVisibleInputs(item);
-
-    if (isLinearScaleQuestion(item)) {
-      return "scale";
-    }
 
     if (item.querySelector('[role="radio"]')) {
       return "radio";
@@ -180,26 +178,14 @@
   }
 
   async function extractOptions(item, type) {
-    if (type === "scale") {
-      return extractScaleOptions(item);
-    }
-
     if (type === "radio" || type === "checkbox") {
-      const role = type === "radio" ? "radio" : "checkbox";
-      return unique(
-        Array.from(item.querySelectorAll(`[role="${role}"]`))
-          .map(getElementLabel)
-          .map(cleanOptionText)
-          .filter(Boolean)
-      );
+      return extractRoleOptions(item, type);
     }
 
     if (type === "select") {
-      const localOptions = unique(
-        Array.from(item.querySelectorAll("option, [role='option']"))
-          .map(getElementLabel)
-          .map(cleanOptionText)
-          .filter(Boolean)
+      const localOptions = filterOptions(
+        Array.from(item.querySelectorAll("option, [role='option']")).map(getElementLabel),
+        ""
       );
 
       if (localOptions.length > 0) {
@@ -212,6 +198,14 @@
     return [];
   }
 
+  function extractRoleOptions(item, type) {
+    const role = type === "radio" ? "radio" : "checkbox";
+    return Array.from(item.querySelectorAll(`[role="${role}"]`))
+      .filter(isVisible)
+      .map(getElementLabel)
+      .filter(Boolean);
+  }
+
   async function readDropdownOptions(item) {
     const trigger = item.querySelector('[role="listbox"], [aria-haspopup="listbox"], select');
 
@@ -219,7 +213,7 @@
       return [];
     }
 
-    const beforeOpen = new Set(Array.from(document.querySelectorAll("[role='option']")).map((el) => el));
+    const beforeOpen = new Set(Array.from(document.querySelectorAll("[role='option']")));
 
     try {
       trigger.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
@@ -229,11 +223,10 @@
       const options = Array.from(document.querySelectorAll("[role='option']"))
         .filter((option) => !beforeOpen.has(option) || isVisible(option))
         .map(getElementLabel)
-        .map(cleanOptionText)
         .filter(Boolean);
 
       closeOpenPopup(trigger);
-      return unique(options);
+      return options;
     } catch (error) {
       console.warn("Failed to read dropdown options:", error);
       closeOpenPopup(trigger);
@@ -241,44 +234,36 @@
     }
   }
 
-  function isLinearScaleQuestion(item) {
-    const options = extractScaleOptions(item);
-    return options.length >= 3 && options.length <= 10 && isConsecutiveNumericOptions(options);
-  }
+  function filterOptions(options, questionText) {
+    const questionComparable = normalizeComparable(questionText);
+    const seen = new Set();
+    const result = [];
 
-  function extractScaleOptions(item) {
-    const numericOptions = Array.from(item.querySelectorAll('[role="radio"]'))
-      .map(extractNumericOptionValue)
-      .filter(Boolean);
+    for (const option of options) {
+      const cleaned = cleanOptionText(option);
+      const comparable = normalizeComparable(cleaned);
 
-    return unique(numericOptions).sort((a, b) => Number(a) - Number(b));
-  }
-
-  function extractNumericOptionValue(element) {
-    const candidates = [
-      element.getAttribute("data-value"),
-      element.getAttribute("aria-label"),
-      element.innerText,
-      element.textContent
-    ];
-
-    for (const candidate of candidates) {
-      const match = String(candidate || "").match(/(?:^|\b)(10|[1-9])(?:\b|$)/);
-
-      if (match) {
-        return match[1];
+      if (!cleaned || comparable === questionComparable || SKIP_OPTION_TEXT.has(comparable) || seen.has(comparable)) {
+        continue;
       }
+
+      seen.add(comparable);
+      result.push(cleaned);
     }
 
-    return "";
+    return result;
   }
 
-  function isConsecutiveNumericOptions(options) {
-    const numbers = options.map(Number).filter((number) => Number.isInteger(number));
-
-    if (numbers.length !== options.length) {
+  function isNumericScaleOptions(options) {
+    if (!Array.isArray(options) || options.length < 2) {
       return false;
     }
+
+    if (!options.every((option) => /^\d+$/.test(String(option).trim()))) {
+      return false;
+    }
+
+    const numbers = options.map((option) => Number(String(option).trim())).sort((a, b) => a - b);
 
     for (let index = 1; index < numbers.length; index += 1) {
       if (numbers[index] !== numbers[index - 1] + 1) {
@@ -352,8 +337,8 @@
     }
 
     return (
-      element.getAttribute("aria-label") ||
       element.getAttribute("data-value") ||
+      element.getAttribute("aria-label") ||
       element.innerText ||
       element.textContent ||
       ""
@@ -378,16 +363,9 @@
   }
 
   function cleanOptionText(text) {
-    const cleaned = cleanText(text)
+    return cleanText(text)
       .replace(/\s+\(.*required.*\)$/i, "")
       .trim();
-    const comparable = normalizeComparable(cleaned);
-
-    if (!cleaned || SKIP_OPTION_TEXT.has(comparable)) {
-      return "";
-    }
-
-    return cleaned;
   }
 
   function cleanText(text) {
@@ -445,6 +423,7 @@
 
   window.LocalAIFormParser = {
     parseGoogleForm,
-    isSensitiveQuestion
+    isSensitiveQuestion,
+    isNumericScaleOptions
   };
 })();

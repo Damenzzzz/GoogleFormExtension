@@ -21,18 +21,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       sendResponse({
         ok: false,
-        error: serializeError(error)
+        error: {
+          message: error?.message || "Unknown error",
+          status: error?.status || null,
+          rawResponse: error?.rawResponse || null,
+          stack: error?.stack || null
+        }
       });
     });
 
   return true;
 });
-
-function serializeError(error) {
-  return {
-    message: error?.message || "Unknown error",
-    status: error?.status || null,
-    rawResponse: error?.rawResponse || null,
-    stack: error?.stack || null
-  };
-}
