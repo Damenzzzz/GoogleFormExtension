@@ -79,7 +79,7 @@ async function loadStoredState() {
 
   state.form = stored[STORAGE_KEYS.form] || null;
   state.draft = stored[STORAGE_KEYS.draft] || null;
-  state.rawAIResponse = stored[STORAGE_KEYS.rawAIResponse] || "";
+  state.rawAIResponse = state.draft?.rawResponse || stored[STORAGE_KEYS.rawAIResponse] || "";
   state.status = {
     ...DEFAULT_STATUS,
     ...(stored[STORAGE_KEYS.status] || {})
@@ -139,6 +139,8 @@ async function analyzeForm() {
 
     state.form = response.form;
     state.draft = null;
+    state.rawAIResponse = "";
+    state.rawResponseVisible = false;
 
     setStatus({
       formStatus: "Analyzed",
@@ -150,6 +152,7 @@ async function analyzeForm() {
     await chromeSet({
       [STORAGE_KEYS.form]: state.form,
       [STORAGE_KEYS.draft]: null,
+      [STORAGE_KEYS.rawAIResponse]: "",
       [STORAGE_KEYS.status]: state.status
     });
 
@@ -188,9 +191,20 @@ async function generateAnswers() {
     if (!response?.ok) {
       const message = response?.error?.message || "AI generation failed.";
       if (response?.error?.rawResponse) {
-        state.rawAIResponse = String(response.error.rawResponse);
+        const rawResponse = String(response.error.rawResponse);
+        state.draft = {
+          answers: [],
+          warnings: ["AI returned a response that could not be parsed as the expected JSON."],
+          rawResponse
+        };
+        state.rawAIResponse = rawResponse;
         state.rawResponseVisible = false;
+        setStatus({
+          aiStatus: "Error"
+        });
         await chromeSet({
+          [STORAGE_KEYS.draft]: state.draft,
+          [STORAGE_KEYS.status]: state.status,
           [STORAGE_KEYS.rawAIResponse]: state.rawAIResponse
         });
         renderPreview();
@@ -250,6 +264,8 @@ async function fillSafeAnswers() {
 async function clearDraft() {
   state.form = null;
   state.draft = null;
+  state.rawAIResponse = "";
+  state.rawResponseVisible = false;
   state.status = { ...DEFAULT_STATUS };
 
   await chromeRemove([STORAGE_KEYS.form, STORAGE_KEYS.draft, STORAGE_KEYS.rawAIResponse, STORAGE_KEYS.status]);
@@ -265,13 +281,13 @@ function renderPreview() {
   const rawResponsePanel = $("rawResponsePanel");
   const answers = state.draft?.answers || [];
   const warningItems = state.draft?.warnings || [];
-  const rawResponse = String(state.rawAIResponse || "");
+  const rawResponse = String(state.draft?.rawResponse || state.rawAIResponse || "");
 
   $("previewCount").textContent = answers.length ? `${answers.length} answer(s)` : "No answers";
   rawToggleBtn.classList.toggle("hidden", !rawResponse);
   rawToggleBtn.textContent = state.rawResponseVisible ? "Hide raw AI response" : "Show raw AI response";
   rawResponsePanel.classList.toggle("hidden", !rawResponse || !state.rawResponseVisible);
-  rawResponsePanel.textContent = rawResponse ? rawResponse.slice(0, 12000) : "";
+  rawResponsePanel.value = rawResponse ? rawResponse.slice(0, 12000) : "";
 
   if (warningItems.length) {
     warnings.classList.remove("hidden");

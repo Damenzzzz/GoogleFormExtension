@@ -17,7 +17,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
     })
     .catch((error) => {
-      console.error("Generate answers failed:", error);
+      console.error("[AI Form Filler] Generate answers failed:", error);
 
       sendResponse({
         ok: false,
