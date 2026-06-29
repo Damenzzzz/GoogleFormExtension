@@ -103,6 +103,8 @@
         return fillTextarea(item, value);
       case "date":
         return fillDateOrTime(item, value);
+      case "scale":
+        return fillRadio(item, value);
       case "radio":
         return fillRadio(item, value);
       case "checkbox":

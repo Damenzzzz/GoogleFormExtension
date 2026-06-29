@@ -7,11 +7,10 @@
     "storage",
     "activeTab",
     "scripting"
-    
   ],
   "host_permissions": [
     "https://docs.google.com/forms/*",
-    "https://*/*"
+    "https://llm.alem.ai/*"
   ],
   "action": {
     "default_title": "AI Form Filler",

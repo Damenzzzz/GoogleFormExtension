@@ -312,6 +312,53 @@ select:focus {
   gap: 10px;
 }
 
+.preview-heading-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.raw-toggle {
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--text);
+  background: #101010;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.raw-toggle:hover {
+  background: #171717;
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.raw-response {
+  max-height: 220px;
+  margin: 0 0 10px;
+  padding: 12px;
+  overflow: auto;
+  color: #d8d8d8;
+  background: #090909;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-family:
+    "SFMono-Regular",
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .preview-card,
 .empty-state,
 .warning-card {

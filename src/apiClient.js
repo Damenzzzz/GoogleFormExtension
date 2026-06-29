@@ -1,16 +1,25 @@
+import { LOCAL_AI_CONFIG } from "./localConfig.js";
+
 const SYSTEM_PROMPT = `You are an AI assistant that helps fill Google Forms.
 
 Use only the user's profile, form questions, available options, and optional instructions.
 Do not invent important facts.
 If you do not know the answer, return an empty string.
-For choice questions, select only from the provided options.
+For radio, checkbox, select, scale, and rating questions, select only from the provided options.
+For rating scale questions such as 1-5 or 1-10, return one allowed option as a string. If the user's optional instructions explicitly ask for random answers, you may choose a random allowed value for survey or rating questions.
+For text questions, answer briefly and directly.
+Do not invent personal facts if they are not present in the user profile.
 Do not answer sensitive questions such as passwords, card data, passport data, IIN, banking details, or private address.
 Return only valid JSON. Do not use markdown.`;
 
 const REQUEST_TIMEOUT_MS = 60000;
 
 export async function generateAnswersWithAlem(payload) {
-  const config = await loadLocalAIConfig();
+  const config = loadLocalAIConfig();
+  const apiUrl = `${config.baseUrl}/chat/completions`;
+
+  console.log("[AI Form Filler] Using model:", config.model);
+  console.log("[AI Form Filler] API URL:", apiUrl);
 
   try {
     return await requestChatCompletion(config, payload, true);
@@ -23,19 +32,8 @@ export async function generateAnswersWithAlem(payload) {
   }
 }
 
-async function loadLocalAIConfig() {
-  let module;
-
-  try {
-    module = await import("./localConfig.js");
-  } catch (error) {
-    throw createUserError(
-      "Missing src/localConfig.js. Create it from src/localConfig.example.js and set baseUrl, model, and apiKey.",
-      { cause: error }
-    );
-  }
-
-  const config = module.LOCAL_AI_CONFIG;
+function loadLocalAIConfig() {
+  const config = LOCAL_AI_CONFIG;
 
   if (!config || typeof config !== "object") {
     throw createUserError("src/localConfig.js must export LOCAL_AI_CONFIG.");
@@ -46,7 +44,7 @@ async function loadLocalAIConfig() {
   const apiKey = String(config.apiKey || "").trim();
 
   if (!baseUrl || !model || !apiKey) {
-    throw createUserError("LOCAL_AI_CONFIG requires non-empty baseUrl, model, and apiKey values.");
+    throw createUserError("LOCAL_AI_CONFIG requires baseUrl, model, and apiKey.");
   }
 
   return { baseUrl: stripTrailingSlashes(baseUrl), model, apiKey };
@@ -212,7 +210,8 @@ function normalizeAnswerValue(value) {
 }
 
 function createHttpError(response, responseText) {
-  const message = `Alem API request failed with HTTP ${response.status}. ${extractErrorMessage(responseText)}`;
+  const rawPreview = extractErrorMessage(responseText);
+  const message = `Alem API request failed (HTTP ${response.status})${rawPreview ? `: ${rawPreview}` : "."}`;
   return createUserError(message.trim(), {
     status: response.status,
     rawResponse: responseText

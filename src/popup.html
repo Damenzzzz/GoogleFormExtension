@@ -201,10 +201,14 @@
       <section id="previewSection" class="panel preview-panel">
         <div class="section-heading">
           <h2>Preview</h2>
-          <span id="previewCount" class="section-note">No answers</span>
+          <div class="preview-heading-actions">
+            <button id="rawToggleBtn" class="raw-toggle hidden" type="button">Show raw AI response</button>
+            <span id="previewCount" class="section-note">No answers</span>
+          </div>
         </div>
 
         <div id="warnings" class="warnings hidden"></div>
+        <pre id="rawResponsePanel" class="raw-response hidden"></pre>
         <div id="previewList" class="preview-list">
           <div class="empty-state">
             Generated answers will appear here before anything is filled.

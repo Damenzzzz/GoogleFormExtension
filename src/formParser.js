@@ -74,13 +74,7 @@
       ? listItems
       : Array.from(document.querySelectorAll("[data-params], .Qr7Oae"));
 
-    return candidates.filter((item) => {
-      if (!isVisible(item)) {
-        return false;
-      }
-
-      return Boolean(extractQuestionText(item)) && hasQuestionControl(item);
-    });
+    return candidates.filter((item) => isVisible(item) && Boolean(extractQuestionText(item)) && hasQuestionControl(item));
   }
 
   function extractFormTitle() {
@@ -150,6 +144,10 @@
     const comparable = normalizeComparable(questionText);
     const inputs = getVisibleInputs(item);
 
+    if (isLinearScaleQuestion(item)) {
+      return "scale";
+    }
+
     if (item.querySelector('[role="radio"]')) {
       return "radio";
     }
@@ -182,6 +180,10 @@
   }
 
   async function extractOptions(item, type) {
+    if (type === "scale") {
+      return extractScaleOptions(item);
+    }
+
     if (type === "radio" || type === "checkbox") {
       const role = type === "radio" ? "radio" : "checkbox";
       return unique(
@@ -237,6 +239,54 @@
       closeOpenPopup(trigger);
       return [];
     }
+  }
+
+  function isLinearScaleQuestion(item) {
+    const options = extractScaleOptions(item);
+    return options.length >= 3 && options.length <= 10 && isConsecutiveNumericOptions(options);
+  }
+
+  function extractScaleOptions(item) {
+    const numericOptions = Array.from(item.querySelectorAll('[role="radio"]'))
+      .map(extractNumericOptionValue)
+      .filter(Boolean);
+
+    return unique(numericOptions).sort((a, b) => Number(a) - Number(b));
+  }
+
+  function extractNumericOptionValue(element) {
+    const candidates = [
+      element.getAttribute("data-value"),
+      element.getAttribute("aria-label"),
+      element.innerText,
+      element.textContent
+    ];
+
+    for (const candidate of candidates) {
+      const match = String(candidate || "").match(/(?:^|\b)(10|[1-9])(?:\b|$)/);
+
+      if (match) {
+        return match[1];
+      }
+    }
+
+    return "";
+  }
+
+  function isConsecutiveNumericOptions(options) {
+    const numbers = options.map(Number).filter((number) => Number.isInteger(number));
+
+    if (numbers.length !== options.length) {
+      return false;
+    }
+
+    for (let index = 1; index < numbers.length; index += 1) {
+      if (numbers[index] !== numbers[index - 1] + 1) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   function detectRequired(item) {
@@ -301,13 +351,13 @@
       return "";
     }
 
-    const ariaLabel = element.getAttribute("aria-label");
-
-    if (ariaLabel) {
-      return ariaLabel;
-    }
-
-    return element.innerText || element.textContent || "";
+    return (
+      element.getAttribute("aria-label") ||
+      element.getAttribute("data-value") ||
+      element.innerText ||
+      element.textContent ||
+      ""
+    );
   }
 
   function isSensitiveQuestion(text) {

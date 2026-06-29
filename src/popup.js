@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   optionalInstructions: "localAiOptionalInstructions",
   form: "localAiLastForm",
   draft: "localAiDraft",
+  rawAIResponse: "localAiRawAIResponse",
   status: "localAiStatus"
 };
 
@@ -35,6 +36,8 @@ const DEFAULT_STATUS = {
 const state = {
   form: null,
   draft: null,
+  rawAIResponse: "",
+  rawResponseVisible: false,
   status: { ...DEFAULT_STATUS },
   busy: false
 };
@@ -56,6 +59,7 @@ function bindEvents() {
   $("previewBtn").addEventListener("click", renderPreview);
   $("fillBtn").addEventListener("click", fillSafeAnswers);
   $("clearBtn").addEventListener("click", clearDraft);
+  $("rawToggleBtn").addEventListener("click", toggleRawResponse);
 }
 
 async function loadStoredState() {
@@ -65,6 +69,7 @@ async function loadStoredState() {
     STORAGE_KEYS.optionalInstructions,
     STORAGE_KEYS.form,
     STORAGE_KEYS.draft,
+    STORAGE_KEYS.rawAIResponse,
     STORAGE_KEYS.status
   ]);
 
@@ -74,6 +79,7 @@ async function loadStoredState() {
 
   state.form = stored[STORAGE_KEYS.form] || null;
   state.draft = stored[STORAGE_KEYS.draft] || null;
+  state.rawAIResponse = stored[STORAGE_KEYS.rawAIResponse] || "";
   state.status = {
     ...DEFAULT_STATUS,
     ...(stored[STORAGE_KEYS.status] || {})
@@ -164,6 +170,8 @@ async function generateAnswers() {
       aiStatus: "Generating",
       fillStatus: "Not filled"
     });
+    state.rawAIResponse = "";
+    state.rawResponseVisible = false;
 
     const payload = {
       profile: getProfileFromForm(),
@@ -180,18 +188,26 @@ async function generateAnswers() {
     if (!response?.ok) {
       const message = response?.error?.message || "AI generation failed.";
       if (response?.error?.rawResponse) {
+        state.rawAIResponse = String(response.error.rawResponse);
+        state.rawResponseVisible = false;
+        await chromeSet({
+          [STORAGE_KEYS.rawAIResponse]: state.rawAIResponse
+        });
+        renderPreview();
         console.error("Raw AI response:", response.error.rawResponse);
       }
       throw new Error(message);
     }
 
     state.draft = response.result;
+    state.rawAIResponse = "";
     setStatus({
       aiStatus: "Generated"
     });
 
     await chromeSet({
       [STORAGE_KEYS.draft]: state.draft,
+      [STORAGE_KEYS.rawAIResponse]: "",
       [STORAGE_KEYS.status]: state.status
     });
 
@@ -236,7 +252,7 @@ async function clearDraft() {
   state.draft = null;
   state.status = { ...DEFAULT_STATUS };
 
-  await chromeRemove([STORAGE_KEYS.form, STORAGE_KEYS.draft, STORAGE_KEYS.status]);
+  await chromeRemove([STORAGE_KEYS.form, STORAGE_KEYS.draft, STORAGE_KEYS.rawAIResponse, STORAGE_KEYS.status]);
   renderStatus();
   renderPreview();
   showToast("Draft cleared.");
@@ -245,10 +261,17 @@ async function clearDraft() {
 function renderPreview() {
   const previewList = $("previewList");
   const warnings = $("warnings");
+  const rawToggleBtn = $("rawToggleBtn");
+  const rawResponsePanel = $("rawResponsePanel");
   const answers = state.draft?.answers || [];
   const warningItems = state.draft?.warnings || [];
+  const rawResponse = String(state.rawAIResponse || "");
 
   $("previewCount").textContent = answers.length ? `${answers.length} answer(s)` : "No answers";
+  rawToggleBtn.classList.toggle("hidden", !rawResponse);
+  rawToggleBtn.textContent = state.rawResponseVisible ? "Hide raw AI response" : "Show raw AI response";
+  rawResponsePanel.classList.toggle("hidden", !rawResponse || !state.rawResponseVisible);
+  rawResponsePanel.textContent = rawResponse ? rawResponse.slice(0, 12000) : "";
 
   if (warningItems.length) {
     warnings.classList.remove("hidden");
@@ -259,7 +282,9 @@ function renderPreview() {
   }
 
   if (!answers.length) {
-    previewList.innerHTML = `<div class="empty-state">Generated answers will appear here before anything is filled.</div>`;
+    previewList.innerHTML = rawResponse
+      ? `<div class="empty-state">AI returned a response that could not be parsed as the expected JSON. Use Show raw AI response for debugging.</div>`
+      : `<div class="empty-state">Generated answers will appear here before anything is filled.</div>`;
     return;
   }
 
@@ -291,6 +316,11 @@ function renderPreview() {
       `;
     })
     .join("");
+}
+
+function toggleRawResponse() {
+  state.rawResponseVisible = !state.rawResponseVisible;
+  renderPreview();
 }
 
 function renderStatus() {
@@ -426,7 +456,7 @@ function sendRuntimeMessage(message) {
     chrome.runtime.sendMessage(message, (response) => {
       const error = chrome.runtime.lastError;
       if (error) {
-        reject(new Error(error.message));
+        reject(new Error(`${error.message}. Reload the extension in chrome://extensions and reopen the popup.`));
         return;
       }
       resolve(response);
