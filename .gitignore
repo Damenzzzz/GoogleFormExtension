@@ -1,0 +1,4 @@
+src/localConfig.js
+node_modules
+dist
+.env
