@@ -18,6 +18,8 @@ const PROFILE_FIELDS = [
   "age",
   "occupation",
   "universityOrCompany",
+  "linkedinUrl",
+  "githubUrl",
   "education",
   "skills",
   "experience",
@@ -59,6 +61,7 @@ function bindEvents() {
   $("analyzeBtn").addEventListener("click", analyzeForm);
   $("generateBtn").addEventListener("click", generateAnswers);
   $("previewBtn").addEventListener("click", previewAnswers);
+  $("highlightAllBtn").addEventListener("click", previewAnswers);
   $("fillBtn").addEventListener("click", () => fillAnswers("safe"));
   $("fillAllBtn").addEventListener("click", () => fillAnswers("all"));
   $("clearBtn").addEventListener("click", clearDraft);
@@ -94,12 +97,16 @@ async function loadStoredState() {
 }
 
 async function refreshActiveTabLabel() {
+  const label = $("activePageLabel");
+
   try {
     const tab = await getActiveTab();
     const isForm = isGoogleFormUrl(tab?.url || "");
-    $("activePageLabel").textContent = isForm ? "Google Form detected" : "Open a Google Form";
+    label.textContent = isForm ? "Google Form detected" : "No form detected";
+    label.classList.toggle("detected", isForm);
   } catch {
-    $("activePageLabel").textContent = "Open a Google Form";
+    label.textContent = "No form detected";
+    label.classList.remove("detected");
   }
 }
 
@@ -109,7 +116,7 @@ async function saveProfile() {
 
 async function persistProfile(showNotification) {
   const profile = getProfileFromForm();
-  const preferences = getPreferencesFromForm();
+  const preferences = getPreferencesFromForm({ effective: false });
   const optionalInstructions = $("optionalInstructions").value.trim();
 
   await chromeSet({
@@ -183,10 +190,11 @@ async function generateAnswers() {
     state.rawAIResponse = "";
     state.rawResponseVisible = false;
 
+    const optionalInstructions = $("optionalInstructions").value.trim();
     const payload = {
       profile: getProfileFromForm(),
-      preferences: getPreferencesFromForm(),
-      optionalInstructions: $("optionalInstructions").value.trim(),
+      preferences: getPreferencesFromForm({ effective: true }),
+      optionalInstructions,
       form: state.form
     };
 
@@ -255,7 +263,7 @@ async function previewAnswers() {
   }
 }
 
-async function previewAnswersOnForm() {
+async function previewAnswersOnForm(answers = state.draft?.answers || [], questions = state.form?.questions || []) {
   if (!hasPreviewAnswers() || !state.form) {
     return;
   }
@@ -263,10 +271,21 @@ async function previewAnswersOnForm() {
   await sendToActiveTab({
     type: "PREVIEW_ANSWERS_ON_FORM",
     payload: {
-      answers: state.draft.answers,
-      questions: state.form.questions || []
+      answers,
+      questions
     }
   });
+}
+
+async function previewSingleAnswerOnForm(index) {
+  const answer = state.draft?.answers?.[index];
+  const question = answer ? getQuestionForAnswer(answer) : null;
+
+  if (!answer || !question) {
+    throw new Error("Question metadata was not found for this preview card.");
+  }
+
+  await previewAnswersOnForm([answer], [question]);
 }
 
 async function fillAnswers(mode) {
@@ -324,8 +343,17 @@ function renderPreview() {
   const answers = state.draft?.answers || [];
   const warningItems = state.draft?.warnings || [];
   const rawResponse = String(state.draft?.rawResponse || state.rawAIResponse || "");
+  const questionsById = new Map((state.form?.questions || []).map((question) => [question.id, question]));
+  const skippedCount = answers.filter((answer) => {
+    const status = getAnswerStatus(answer, questionsById.get(answer.questionId));
+    return status === "skipped" || status === "sensitive";
+  }).length;
+  const editableCount = answers.filter((answer) => !questionsById.get(answer.questionId)?.sensitive).length;
 
-  $("previewCount").textContent = answers.length ? `${answers.length} answer(s)` : "No answers";
+  $("previewCount").textContent = answers.length ? `${answers.length} answers` : "No answers";
+  $("previewSkippedCount").textContent = `${skippedCount} skipped`;
+  $("previewEditableCount").textContent = `${editableCount} editable`;
+  $("highlightAllBtn").disabled = !answers.length;
   rawToggleBtn.classList.toggle("hidden", !rawResponse);
   rawToggleBtn.textContent = state.rawResponseVisible ? "Hide raw AI response" : "Show raw AI response";
   rawResponsePanel.classList.toggle("hidden", !rawResponse || !state.rawResponseVisible);
@@ -346,22 +374,19 @@ function renderPreview() {
     return;
   }
 
-  const questionsById = new Map((state.form?.questions || []).map((question) => [question.id, question]));
   previewList.innerHTML = answers
     .map((answer, index) => renderPreviewCard(answer, questionsById.get(answer.questionId), index))
     .join("");
 }
 
 function renderPreviewCard(answer, question, index) {
-  const sensitive = Boolean(question?.sensitive);
   const confidence = clampConfidence(answer.confidence);
-  const safe = answer.safeToFill === true && !sensitive && confidence >= 0.6 && !isEmptyAnswer(answer.answer);
-  const skipped = answer.safeToFill === false || sensitive || isEmptyAnswer(answer.answer);
+  const status = getAnswerStatus(answer, question);
+  const statusLabel = status === "safe" ? "Safe" : status === "sensitive" ? "Sensitive" : status === "skipped" ? "Skipped" : "Review";
   const badges = [
-    `<span class="badge ${safe ? "safe" : "blocked"}">${safe ? "Safe" : skipped ? "Skipped" : "Review"}</span>`,
-    sensitive ? `<span class="badge blocked">Sensitive</span>` : "",
+    `<span class="badge ${status}">${statusLabel}</span>`,
     answer.manualEdited ? `<span class="badge safe">Manual</span>` : "",
-    confidence < 0.6 && !answer.manualEdited ? `<span class="badge blocked">Low confidence</span>` : "",
+    confidence < 0.6 && !answer.manualEdited && status !== "sensitive" ? `<span class="badge review">Low confidence</span>` : "",
     `<span class="badge">Confidence ${Math.round(confidence * 100)}%</span>`,
     `<span class="badge">${escapeHtml(question?.type || answer.type || "unknown")}</span>`
   ]
@@ -380,7 +405,7 @@ function renderPreviewCard(answer, question, index) {
       <div class="preview-card-actions">
         <button class="mini-button" type="button" data-action="use" data-answer-index="${index}">Use</button>
         <button class="mini-button" type="button" data-action="skip" data-answer-index="${index}">Skip</button>
-        <button class="mini-button" type="button" data-action="highlight" data-answer-index="${index}">Highlight on form</button>
+        <button class="mini-button" type="button" data-action="highlight" data-answer-index="${index}">Highlight</button>
       </div>
     </article>
   `;
@@ -425,7 +450,7 @@ function renderAnswerEditor(answer, question, index) {
     `;
   }
 
-  if (type === "textarea" || String(scalarAnswer(value)).length > 90) {
+  if (["text", "textarea", "unknown"].includes(type) || String(scalarAnswer(value)).length > 90) {
     return `<textarea class="preview-answer-editor" data-editor="text" data-answer-index="${index}" rows="3">${escapeHtml(scalarAnswer(value))}</textarea>`;
   }
 
@@ -461,7 +486,7 @@ function handlePreviewEdit(event) {
     return;
   }
 
-  markAnswerManuallyEdited(answer);
+  markAnswerManuallyEdited(answer, getQuestionForAnswer(answer));
   state.editedAnswers[answer.questionId] = true;
   persistDraft().catch((error) => console.warn("Draft save failed:", error));
 
@@ -487,7 +512,7 @@ function handlePreviewAction(event) {
   }
 
   if (button.dataset.action === "use") {
-    markAnswerManuallyEdited(answer);
+    markAnswerManuallyEdited(answer, getQuestionForAnswer(answer));
     persistDraft().catch((error) => console.warn("Draft save failed:", error));
     renderPreview();
     schedulePreviewHighlights();
@@ -505,14 +530,15 @@ function handlePreviewAction(event) {
   }
 
   if (button.dataset.action === "highlight") {
-    previewAnswersOnForm();
-    showToast("Preview highlighted on the Google Form.");
+    previewSingleAnswerOnForm(index)
+      .then(() => showToast("Preview highlighted on the Google Form."))
+      .catch((error) => showToast(error?.message || "Could not highlight this answer."));
   }
 }
 
-function markAnswerManuallyEdited(answer) {
+function markAnswerManuallyEdited(answer, question) {
   answer.manualEdited = true;
-  answer.safeToFill = true;
+  answer.safeToFill = !question?.sensitive;
   answer.confidence = Math.max(Number(answer.confidence) || 0, 0.9);
   answer.reason = "Manually edited by user";
 }
@@ -575,8 +601,17 @@ function setBusy(isBusy) {
   state.busy = isBusy;
   $("busyIndicator").classList.toggle("hidden", !isBusy);
 
-  for (const id of ["saveProfileBtn", "analyzeBtn", "generateBtn", "previewBtn", "fillBtn", "fillAllBtn", "clearBtn"]) {
-    $(id).disabled = isBusy;
+  for (const id of [
+    "saveProfileBtn",
+    "analyzeBtn",
+    "generateBtn",
+    "previewBtn",
+    "highlightAllBtn",
+    "fillBtn",
+    "fillAllBtn",
+    "clearBtn"
+  ]) {
+    $(id).disabled = isBusy || (id === "highlightAllBtn" && !hasPreviewAnswers());
   }
 }
 
@@ -593,16 +628,25 @@ function setProfileFormValues(profile) {
   }
 }
 
-function getPreferencesFromForm() {
+function getPreferencesFromForm({ effective = true } = {}) {
+  const optionalInstructions = $("optionalInstructions")?.value || "";
+  const selectedFillUnknownBehavior = $("fillUnknownBehavior").value;
+
   return {
     preferredLanguage: $("preferredLanguage").value,
-    tone: $("tone").value
+    tone: $("tone").value,
+    answerLength: $("answerLength").value,
+    fillUnknownBehavior: effective && shouldFillAllFromInstructions(optionalInstructions)
+      ? "fill_all_non_sensitive"
+      : selectedFillUnknownBehavior
   };
 }
 
 function setPreferencesFormValues(preferences) {
   $("preferredLanguage").value = preferences.preferredLanguage || "Auto";
   $("tone").value = preferences.tone || "Professional";
+  $("answerLength").value = preferences.answerLength || "normal";
+  $("fillUnknownBehavior").value = preferences.fillUnknownBehavior || "skip";
 }
 
 function hasPreviewAnswers() {
@@ -611,7 +655,7 @@ function hasPreviewAnswers() {
 
 async function clearFormHighlightsSilently() {
   try {
-    await sendToActiveTab({ type: "CLEAR_FORM_HIGHLIGHTS" });
+    await sendToActiveTab({ type: "CLEAR_FORM_PREVIEW" });
   } catch {
     // Ignore missing content script while clearing local state.
   }
@@ -726,8 +770,35 @@ function normalizeComparable(value) {
   return String(value || "")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t\r\n]+/g, " ")
+    .replace(/[.,!?;:]+$/g, "")
     .trim()
     .toLowerCase();
+}
+
+function getQuestionForAnswer(answer) {
+  return (state.form?.questions || []).find((question) => question.id === answer?.questionId) || null;
+}
+
+function getAnswerStatus(answer, question) {
+  const confidence = clampConfidence(answer?.confidence);
+
+  if (question?.sensitive) {
+    return "sensitive";
+  }
+
+  if (!answer || answer.safeToFill === false || isEmptyAnswer(answer.answer)) {
+    return "skipped";
+  }
+
+  if (answer.manualEdited || (answer.safeToFill === true && confidence >= 0.6)) {
+    return "safe";
+  }
+
+  return "review";
+}
+
+function shouldFillAllFromInstructions(value) {
+  return /random|randomly|\u0440\u0430\u043d\u0434\u043e\u043c|\u0441\u043b\u0443\u0447\u0430\u0439\u043d/i.test(value || "");
 }
 
 function escapeHtml(value) {

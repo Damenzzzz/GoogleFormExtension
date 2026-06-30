@@ -82,6 +82,28 @@ The extension is intentionally conservative:
 - It fills only answers with `safeToFill: true`, non-sensitive questions, confidence `>= 0.6`, and non-empty answers.
 - It previews every generated answer before filling.
 
+## Fill Behavior
+
+The popup includes `Unknown answers behavior`:
+
+- `Skip unknown answers`: missing profile data or low-confidence answers can stay empty and are not filled.
+- `Fill all non-sensitive questions`: harmless survey questions should receive an answer even when profile data is missing. Text questions get a short plausible answer, radio/select/scale questions choose one valid option, and checkbox questions choose 1-3 valid options.
+
+Sensitive questions are still skipped in both modes.
+
+If Optional AI instructions include `random`, `randomly`, `рандом`, or `случайно`, the extension automatically uses `Fill all non-sensitive questions` for that generation.
+
+## Preview On Form
+
+Preview does not fill real fields.
+
+- Text and textarea answers are shown as muted ghost text in the answer area.
+- Radio, checkbox, and scale answers are outlined on the specific option that would be selected.
+- Skipped questions get a soft yellow outline.
+- Sensitive questions get a soft red outline and are not filled.
+
+Old black `AI: ...` badges are no longer used.
+
 ## Editing Answers Before Fill
 
 1. Generate answers.
@@ -92,10 +114,44 @@ The extension is intentionally conservative:
 
 Manual edits are saved into the current draft. Manually edited answers are treated as user-approved non-sensitive preview answers.
 
-## Fill Modes
+Preview cards are editors:
 
-- Safe Answers: fills only high-confidence safe answers.
-- All Previewed: fills all non-sensitive answers currently visible in preview, including manually edited and random survey answers.
+- Text, textarea, and unknown answers use a textarea.
+- Radio, select, and scale answers use a select menu.
+- Checkbox answers use checkbox controls.
+- Each card includes question text, type, status, confidence, reason, and a Highlight button.
+
+## Fill Safe vs Fill All Previewed
+
+- `Fill Safe Answers`: fills only non-sensitive answers with `safeToFill: true`, confidence `>= 0.6`, and a non-empty answer.
+- `Fill All Previewed`: fills every non-sensitive, non-empty preview answer where `safeToFill !== false`. Manually edited answers are filled even if the original AI confidence was low.
+
+The extension never clicks Submit.
+
+## LinkedIn and GitHub
+
+The profile supports optional `LinkedIn URL` and `GitHub URL` fields.
+
+The extension does not open, scrape, or parse these URLs. They are passed to the AI as plain profile text so forms asking for profile links can be answered.
+
+## Answer Length
+
+The popup includes `Answer length`:
+
+- `Short`: one short phrase or sentence.
+- `Normal`: one or two natural sentences.
+- `Detailed`: two to four sentences for open-ended questions.
+
+Simple fields such as name, age, email, and phone should still use exact profile values.
+
+## Reload Extension After Changes
+
+After changing extension source files:
+
+1. Open `chrome://extensions`.
+2. Click Reload on this extension.
+3. Refresh the Google Form tab.
+4. Reopen the popup.
 
 ## Troubleshooting
 

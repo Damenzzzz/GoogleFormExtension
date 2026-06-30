@@ -23,8 +23,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  if (message.type === "CLEAR_FORM_HIGHLIGHTS") {
-    handleClearFormHighlights(sendResponse);
+  if (message.type === "CLEAR_FORM_PREVIEW" || message.type === "CLEAR_FORM_HIGHLIGHTS") {
+    handleClearFormPreview(sendResponse);
     return true;
   }
 
@@ -101,15 +101,16 @@ function handlePreviewAnswersOnForm(message, sendResponse) {
   }
 }
 
-function handleClearFormHighlights(sendResponse) {
+function handleClearFormPreview(sendResponse) {
   try {
-    window.LocalAIFormFiller?.clearFormHighlights?.();
+    const clearPreview = window.LocalAIFormFiller?.clearFormPreview || window.LocalAIFormFiller?.clearFormHighlights;
+    clearPreview?.();
     sendResponse({ ok: true });
   } catch (error) {
-    console.error("Clear form highlights failed:", error);
+    console.error("Clear form preview failed:", error);
     sendResponse({
       ok: false,
-      error: error?.message || "Failed to clear form highlights."
+      error: error?.message || "Failed to clear form preview."
     });
   }
 }

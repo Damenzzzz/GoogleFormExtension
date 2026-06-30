@@ -9,11 +9,11 @@
   <body>
     <main class="app-shell app">
       <header class="app-header header">
-        <div>
+        <div class="brand-block">
           <h1>AI Form Filler</h1>
           <p>Local AI assistant for Google Forms</p>
         </div>
-        <span class="header-dot" aria-hidden="true"></span>
+        <span id="activePageLabel" class="status-pill">Checking page</span>
       </header>
 
       <div class="content">
@@ -23,80 +23,93 @@
             <span class="section-note">Saved locally</span>
           </div>
 
-          <div class="field-grid two">
+          <div class="form-grid two">
             <label class="field">
-              <span>First name</span>
+              <span class="field-label">First name <span class="required-star">*</span></span>
               <input id="firstName" type="text" autocomplete="given-name">
             </label>
             <label class="field">
-              <span>Last name</span>
+              <span class="field-label">Last name <span class="required-star">*</span></span>
               <input id="lastName" type="text" autocomplete="family-name">
             </label>
           </div>
 
-          <div class="field-grid two">
+          <div class="form-grid two">
             <label class="field">
-              <span>Email</span>
+              <span class="field-label">Email <span class="required-star">*</span></span>
               <input id="email" type="email" autocomplete="email">
             </label>
             <label class="field">
-              <span>Phone</span>
+              <span class="field-label">Phone <span class="required-star">*</span></span>
               <input id="phone" type="tel" autocomplete="tel">
             </label>
           </div>
 
-          <div class="field-grid three">
+          <div class="form-grid three">
             <label class="field">
-              <span>City</span>
+              <span class="field-label">City <span class="required-star">*</span></span>
               <input id="city" type="text" autocomplete="address-level2">
             </label>
             <label class="field">
-              <span>Country</span>
+              <span class="field-label">Country <span class="required-star">*</span></span>
               <input id="country" type="text" autocomplete="country-name">
             </label>
             <label class="field">
-              <span>Age optional</span>
+              <span class="field-label">Age <span class="optional-text">optional</span></span>
               <input id="age" type="text" inputmode="numeric">
             </label>
           </div>
 
-          <label class="field">
-            <span>Occupation / Role</span>
-            <input id="occupation" type="text">
-          </label>
+          <div class="form-grid two">
+            <label class="field">
+              <span class="field-label">Occupation / Role <span class="required-star">*</span></span>
+              <input id="occupation" type="text">
+            </label>
+            <label class="field">
+              <span class="field-label">University / Company <span class="optional-text">optional</span></span>
+              <input id="universityOrCompany" type="text">
+            </label>
+          </div>
+
+          <div class="form-grid two">
+            <label class="field">
+              <span class="field-label">LinkedIn URL <span class="optional-text">optional</span></span>
+              <input id="linkedinUrl" type="url" inputmode="url" autocomplete="url">
+            </label>
+            <label class="field">
+              <span class="field-label">GitHub URL <span class="optional-text">optional</span></span>
+              <input id="githubUrl" type="url" inputmode="url" autocomplete="url">
+            </label>
+          </div>
+
+          <div class="form-grid two">
+            <label class="field">
+              <span class="field-label">Education <span class="optional-text">optional</span></span>
+              <textarea id="education" rows="2"></textarea>
+            </label>
+            <label class="field">
+              <span class="field-label">Skills <span class="optional-text">optional</span></span>
+              <textarea id="skills" rows="2"></textarea>
+            </label>
+          </div>
 
           <label class="field">
-            <span>University / Company</span>
-            <input id="universityOrCompany" type="text">
-          </label>
-
-          <label class="field">
-            <span>Education</span>
-            <textarea id="education" rows="2"></textarea>
-          </label>
-
-          <label class="field">
-            <span>Skills</span>
-            <textarea id="skills" rows="2"></textarea>
-          </label>
-
-          <label class="field">
-            <span>Experience</span>
+            <span class="field-label">Experience <span class="optional-text">optional</span></span>
             <textarea id="experience" rows="3"></textarea>
           </label>
 
           <label class="field">
-            <span>Languages</span>
+            <span class="field-label">Languages <span class="optional-text">optional</span></span>
             <input id="languages" type="text">
           </label>
 
           <label class="field">
-            <span>Short bio</span>
+            <span class="field-label">Short bio <span class="optional-text">optional</span></span>
             <textarea id="shortBio" rows="3"></textarea>
           </label>
 
           <label class="field">
-            <span>Motivation / About me</span>
+            <span class="field-label">Motivation / About me <span class="optional-text">optional</span></span>
             <textarea id="motivation" rows="3"></textarea>
           </label>
         </section>
@@ -107,24 +120,50 @@
             <span class="section-note">Applied to AI output</span>
           </div>
 
-          <label class="field">
-            <span>Preferred language</span>
-            <select id="preferredLanguage">
-              <option value="Auto">Auto</option>
-              <option value="Russian">Russian</option>
-              <option value="English">English</option>
-              <option value="Kazakh">Kazakh</option>
-            </select>
-          </label>
+          <div class="form-grid three">
+            <label class="field">
+              <span class="field-label">Preferred language</span>
+              <select id="preferredLanguage">
+                <option value="Auto">Auto</option>
+                <option value="Russian">Russian</option>
+                <option value="English">English</option>
+                <option value="Kazakh">Kazakh</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Tone</span>
+              <select id="tone">
+                <option value="Professional">Professional</option>
+                <option value="Friendly">Friendly</option>
+                <option value="Short and clear">Short and clear</option>
+                <option value="Detailed">Detailed</option>
+                <option value="Student style">Student style</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Answer length</span>
+              <select id="answerLength">
+                <option value="short">Short</option>
+                <option value="normal">Normal</option>
+                <option value="detailed">Detailed</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel card">
+          <div class="section-heading">
+            <h2>Fill behavior</h2>
+            <span class="section-note">Unknown answers</span>
+          </div>
 
           <label class="field">
-            <span>Tone</span>
-            <select id="tone">
-              <option value="Professional">Professional</option>
-              <option value="Friendly">Friendly</option>
-              <option value="Short and clear">Short and clear</option>
-              <option value="Detailed">Detailed</option>
-              <option value="Student style">Student style</option>
+            <span class="field-label">Unknown answers behavior</span>
+            <select id="fillUnknownBehavior">
+              <option value="skip">Skip unknown answers</option>
+              <option value="fill_all_non_sensitive">Fill all non-sensitive questions</option>
             </select>
           </label>
         </section>
@@ -136,11 +175,11 @@
           </div>
 
           <label class="field">
-            <span>Optional AI instructions</span>
+            <span class="field-label">Optional AI instructions <span class="optional-text">optional</span></span>
             <textarea
               id="optionalInstructions"
               rows="4"
-              placeholder="Например: отвечай как студент LLM Engineer, не придумывай опыт, делай ответы короткими, если вопрос непонятен — оставь пустым."
+              placeholder="Example: answer as an LLM engineering student, keep answers concise, randomize harmless survey choices."
             ></textarea>
           </label>
         </section>
@@ -148,7 +187,7 @@
         <section class="panel card">
           <div class="section-heading">
             <h2>Actions</h2>
-            <span id="activePageLabel" class="section-note">Waiting for form</span>
+            <span class="section-note">Workflow</span>
           </div>
 
           <div class="action-grid actions-grid">
@@ -174,7 +213,7 @@
               <span>Clear Draft</span>
             </button>
           </div>
-          <p class="action-help">Safe mode fills only high-confidence answers. All Previewed fills every non-sensitive answer visible in preview.</p>
+          <p class="action-help">Safe fills high-confidence answers. All Previewed fills every non-sensitive answer visible in preview.</p>
         </section>
 
         <section class="panel card status-panel">
@@ -204,12 +243,18 @@
         </section>
 
         <section id="previewSection" class="panel card preview-panel">
-          <div class="section-heading">
+          <div class="section-heading preview-heading">
             <h2>Preview</h2>
             <div class="preview-heading-actions">
+              <button id="highlightAllBtn" class="raw-toggle" type="button">Highlight all</button>
               <button id="rawToggleBtn" class="raw-toggle hidden" type="button">Show raw AI response</button>
-              <span id="previewCount" class="section-note">No answers</span>
             </div>
+          </div>
+
+          <div class="preview-summary" aria-live="polite">
+            <span id="previewCount">No answers</span>
+            <span id="previewSkippedCount">0 skipped</span>
+            <span id="previewEditableCount">0 editable</span>
           </div>
 
           <div id="warnings" class="warnings hidden"></div>

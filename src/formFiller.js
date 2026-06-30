@@ -1,11 +1,19 @@
 (function () {
   const MIN_CONFIDENCE = 0.6;
-  const HIGHLIGHT_STYLE_ID = "ai-form-filler-highlight-style";
-  const HIGHLIGHT_CLASS = "ai-form-filler-highlight";
-  const HIGHLIGHT_SAFE_CLASS = "ai-form-filler-highlight-safe";
-  const HIGHLIGHT_WARN_CLASS = "ai-form-filler-highlight-warn";
-  const HIGHLIGHT_BLOCKED_CLASS = "ai-form-filler-highlight-blocked";
-  const BADGE_CLASS = "ai-form-filler-badge";
+  const PREVIEW_STYLE_ID = "ai-form-filler-preview-style";
+  const QUESTION_PREVIEW_CLASS = "ai-form-filler-question-preview";
+  const QUESTION_SKIPPED_CLASS = "ai-form-filler-question-preview-skipped";
+  const QUESTION_SENSITIVE_CLASS = "ai-form-filler-question-preview-sensitive";
+  const OPTION_PREVIEW_CLASS = "ai-form-filler-option-preview";
+  const OPTION_CHECKBOX_PREVIEW_CLASS = "ai-form-filler-option-preview-checkbox";
+  const GHOST_ANSWER_CLASS = "ai-form-filler-ghost-answer";
+  const LEGACY_BADGE_CLASS = "ai-form-filler-badge";
+  const LEGACY_HIGHLIGHT_CLASSES = [
+    "ai-form-filler-highlight",
+    "ai-form-filler-highlight-safe",
+    "ai-form-filler-highlight-warn",
+    "ai-form-filler-highlight-blocked"
+  ];
 
   async function fillSafeAnswers({ answers = [], questions = [] }) {
     return fillAnswers({ answers, questions, mode: "safe" });
@@ -170,17 +178,19 @@
     const timeParts = parseTimeParts(scalar);
 
     for (const input of inputs) {
-      const label = normalizeComparable(input.getAttribute("aria-label") || input.placeholder || input.name || "");
+      const label = normalizeOptionText(input.getAttribute("aria-label") || input.placeholder || input.name || "");
 
       if (dateParts) {
-        if (/(day|день|күн)/i.test(label)) setNativeValue(input, dateParts.day);
-        else if (/(month|месяц|ай)/i.test(label)) setNativeValue(input, dateParts.month);
-        else if (/(year|год|жыл)/i.test(label)) setNativeValue(input, dateParts.year);
+        if (/(day|\u0434\u0435\u043d\u044c|\u043a\u04af\u043d)/i.test(label)) setNativeValue(input, dateParts.day);
+        else if (/(month|\u043c\u0435\u0441\u044f\u0446|\u0430\u0439)/i.test(label)) setNativeValue(input, dateParts.month);
+        else if (/(year|\u0433\u043e\u0434|\u0436\u044b\u043b)/i.test(label)) setNativeValue(input, dateParts.year);
       }
 
       if (timeParts) {
-        if (/(hour|час|сағат)/i.test(label)) setNativeValue(input, timeParts.hour);
-        else if (/(minute|минута|минут|мин|minute)/i.test(label)) setNativeValue(input, timeParts.minute);
+        if (/(hour|\u0447\u0430\u0441|\u0441\u0430\u0493\u0430\u0442)/i.test(label)) setNativeValue(input, timeParts.hour);
+        else if (/(minute|\u043c\u0438\u043d\u0443\u0442\u0430|\u043c\u0438\u043d\u0443\u0442|\u043c\u0438\u043d)/i.test(label)) {
+          setNativeValue(input, timeParts.minute);
+        }
       }
     }
 
@@ -241,7 +251,7 @@
     await wait(180);
 
     const visibleOptions = Array.from(document.querySelectorAll("[role='option']")).filter(isVisible);
-    const option = findMatchingElement(visibleOptions, wanted, false);
+    const option = findMatchingElement(visibleOptions, wanted, false, { requireVisible: true });
 
     if (!option) {
       closeOpenPopup(trigger);
@@ -253,7 +263,7 @@
   }
 
   function fillNativeSelect(select, value) {
-    const option = findMatchingElement(Array.from(select.options || []), value, false);
+    const option = findMatchingElement(Array.from(select.options || []), value, false, { requireVisible: false });
 
     if (!option) {
       return { ok: false, warning: `No matching native select option for "${value}"` };
@@ -266,32 +276,51 @@
   }
 
   function findMatchingOption(item, role, wanted, numericOnly) {
-    return findMatchingElement(Array.from(item.querySelectorAll(`[role="${role}"]`)), wanted, numericOnly);
+    return findMatchingElement(Array.from(item.querySelectorAll(`[role="${role}"]`)), wanted, numericOnly, {
+      requireVisible: true
+    });
   }
 
-  function findMatchingElement(elements, wanted, numericOnly) {
-    const normalizedWanted = normalizeComparable(numericOnly ? extractNumber(wanted) : wanted);
+  function findMatchingElement(elements, wanted, numericOnly = false, options = {}) {
+    const { requireVisible = true } = options;
+    const wantedNumber = extractNumber(wanted);
+    const normalizedWanted = normalizeOptionText(numericOnly ? wantedNumber || wanted : wanted);
 
-    if (!normalizedWanted) {
+    if (!normalizedWanted && !wantedNumber) {
       return null;
     }
 
-    const visibleElements = elements.filter(isVisible);
-    const exact = visibleElements.find((element) => {
-      const labels = getElementLabels(element, numericOnly);
-      return labels.some((label) => normalizeComparable(label) === normalizedWanted);
+    const candidates = requireVisible ? elements.filter(isVisible) : elements;
+    const exact = candidates.find((element) => {
+      const labels = getElementLabels(element);
+      return labels.some((label) => normalizeOptionText(label) === normalizedWanted);
     });
 
     if (exact) {
       return exact;
     }
 
+    if (wantedNumber) {
+      const numeric = candidates.find((element) => {
+        const labels = getElementLabels(element);
+        return labels.some((label) => extractNumber(label) === wantedNumber || normalizeOptionText(label) === wantedNumber);
+      });
+
+      if (numeric) {
+        return numeric;
+      }
+    }
+
     return (
-      visibleElements.find((element) => {
-        const labels = getElementLabels(element, numericOnly);
+      candidates.find((element) => {
+        const labels = getElementLabels(element);
         return labels.some((label) => {
-          const normalizedLabel = normalizeComparable(label);
-          return normalizedLabel.includes(normalizedWanted) || normalizedWanted.includes(normalizedLabel);
+          const normalizedLabel = normalizeOptionText(label);
+          return (
+            normalizedLabel &&
+            normalizedWanted &&
+            (normalizedLabel.includes(normalizedWanted) || normalizedWanted.includes(normalizedLabel))
+          );
         });
       }) || null
     );
@@ -321,12 +350,19 @@
     element.click();
   }
 
-  function previewAnswersOnForm({ answers = [], questions = [] }) {
-    injectHighlightStyles();
-    clearFormHighlights();
+  function previewAnswersOnForm(input = {}, maybeAnswers) {
+    const payload = Array.isArray(input)
+      ? { questions: input, answers: Array.isArray(maybeAnswers) ? maybeAnswers : [] }
+      : input || {};
+    const answers = Array.isArray(payload.answers) ? payload.answers : [];
+    const questions = Array.isArray(payload.questions) ? payload.questions : [];
+
+    injectPreviewStyles();
+    clearFormPreview();
 
     const questionItems = getQuestionItems();
     const answersById = new Map(answers.map((answer) => [answer.questionId, answer]));
+    let highlightedCount = 0;
 
     for (const question of questions) {
       const item = questionItems[question.domIndex];
@@ -336,85 +372,192 @@
         continue;
       }
 
-      const state = getHighlightState(question, answer);
-      item.classList.add(HIGHLIGHT_CLASS, state.className);
-      item.dataset.aiFormFillerHighlighted = "true";
+      const previewState = getPreviewState(question, answer);
+      item.classList.add(previewState.className);
+      item.dataset.aiFormFillerPreviewed = "true";
+      highlightedCount += 1;
 
-      const badge = document.createElement("div");
-      badge.className = BADGE_CLASS;
-      badge.textContent = `AI: ${formatBadgeAnswer(answer.answer) || "Skipped"}`;
-      item.appendChild(badge);
+      if (previewState.kind !== "answer") {
+        continue;
+      }
+
+      if (["text", "textarea", "unknown"].includes(question.type)) {
+        applyGhostTextPreview(item, answer);
+      } else if (["radio", "checkbox", "scale", "select"].includes(question.type)) {
+        applyChoicePreview(item, question, answer);
+      }
     }
 
-    return { highlightedCount: answers.length };
+    return { highlightedCount };
   }
 
-  function clearFormHighlights() {
-    for (const badge of document.querySelectorAll(`.${BADGE_CLASS}`)) {
+  function clearFormPreview() {
+    for (const badge of document.querySelectorAll(`.${LEGACY_BADGE_CLASS}`)) {
       badge.remove();
     }
 
-    for (const item of document.querySelectorAll("[data-ai-form-filler-highlighted='true']")) {
-      item.classList.remove(HIGHLIGHT_CLASS, HIGHLIGHT_SAFE_CLASS, HIGHLIGHT_WARN_CLASS, HIGHLIGHT_BLOCKED_CLASS);
+    for (const ghost of document.querySelectorAll(`.${GHOST_ANSWER_CLASS}`)) {
+      ghost.remove();
+    }
+
+    for (const option of document.querySelectorAll(`.${OPTION_PREVIEW_CLASS}, .${OPTION_CHECKBOX_PREVIEW_CLASS}`)) {
+      option.classList.remove(OPTION_PREVIEW_CLASS, OPTION_CHECKBOX_PREVIEW_CLASS);
+      option.removeAttribute("data-ai-form-filler-option-preview");
+    }
+
+    for (const item of document.querySelectorAll("[data-ai-form-filler-previewed='true'], [data-ai-form-filler-highlighted='true']")) {
+      item.classList.remove(QUESTION_PREVIEW_CLASS, QUESTION_SKIPPED_CLASS, QUESTION_SENSITIVE_CLASS, ...LEGACY_HIGHLIGHT_CLASSES);
+      item.removeAttribute("data-ai-form-filler-previewed");
       item.removeAttribute("data-ai-form-filler-highlighted");
     }
   }
 
-  function injectHighlightStyles() {
-    if (document.getElementById(HIGHLIGHT_STYLE_ID)) {
+  function applyGhostTextPreview(questionElement, answer) {
+    const text = scalarAnswer(answer?.answer ?? answer);
+
+    if (!text) {
+      return false;
+    }
+
+    const control = findTextPreviewControl(questionElement);
+
+    if (!control) {
+      return false;
+    }
+
+    const ghost = document.createElement("div");
+    ghost.className = GHOST_ANSWER_CLASS;
+    ghost.textContent = text;
+    control.insertAdjacentElement("afterend", ghost);
+    return true;
+  }
+
+  function applyChoicePreview(questionElement, question, answer) {
+    const values = question.type === "checkbox" ? arrayAnswer(answer.answer) : [scalarAnswer(answer.answer)];
+    let matchedCount = 0;
+
+    for (const value of values) {
+      const option = findOptionElement(questionElement, value, question.type);
+
+      if (!option) {
+        continue;
+      }
+
+      const target = getOptionPreviewTarget(option);
+      target.classList.add(question.type === "checkbox" ? OPTION_CHECKBOX_PREVIEW_CLASS : OPTION_PREVIEW_CLASS);
+      target.dataset.aiFormFillerOptionPreview = "true";
+      matchedCount += 1;
+    }
+
+    if (matchedCount === 0 && question.type === "select") {
+      const trigger = questionElement.querySelector('[role="listbox"], [aria-haspopup="listbox"], select');
+
+      if (trigger && isVisible(trigger)) {
+        trigger.classList.add(OPTION_PREVIEW_CLASS);
+        trigger.dataset.aiFormFillerOptionPreview = "true";
+        matchedCount = 1;
+      }
+    }
+
+    return matchedCount;
+  }
+
+  function findOptionElement(questionElement, optionText, questionType = "") {
+    const numericOnly = questionType === "scale";
+    const selector =
+      questionType === "checkbox"
+        ? '[role="checkbox"]'
+        : questionType === "radio" || questionType === "scale"
+          ? '[role="radio"]'
+          : '[role="radio"], [role="checkbox"], [role="option"], option';
+
+    return findMatchingElement(Array.from(questionElement.querySelectorAll(selector)), optionText, numericOnly, {
+      requireVisible: true
+    });
+  }
+
+  function getPreviewState(question, answer) {
+    if (question.sensitive) {
+      return { kind: "sensitive", className: QUESTION_SENSITIVE_CLASS };
+    }
+
+    if (!answer || answer.safeToFill === false || isEmptyAnswer(answer.answer)) {
+      return { kind: "skipped", className: QUESTION_SKIPPED_CLASS };
+    }
+
+    return { kind: "answer", className: QUESTION_PREVIEW_CLASS };
+  }
+
+  function injectPreviewStyles() {
+    if (document.getElementById(PREVIEW_STYLE_ID)) {
       return;
     }
 
     const style = document.createElement("style");
-    style.id = HIGHLIGHT_STYLE_ID;
+    style.id = PREVIEW_STYLE_ID;
     style.textContent = `
-      .${HIGHLIGHT_CLASS} {
-        position: relative !important;
-        outline: 2px solid rgba(255,255,255,0.55) !important;
-        box-shadow: 0 0 0 4px rgba(0,0,0,0.05) !important;
-        border-radius: 12px !important;
+      .${QUESTION_PREVIEW_CLASS} {
+        outline: 2px solid rgba(70, 255, 160, 0.45) !important;
+        box-shadow: 0 0 0 4px rgba(70, 255, 160, 0.08) !important;
+        border-radius: 14px !important;
       }
-      .${HIGHLIGHT_SAFE_CLASS} {
-        outline-color: rgba(120, 255, 180, 0.72) !important;
+      .${QUESTION_SKIPPED_CLASS} {
+        outline: 2px solid rgba(255, 190, 80, 0.55) !important;
+        box-shadow: 0 0 0 4px rgba(255, 190, 80, 0.08) !important;
+        border-radius: 14px !important;
       }
-      .${HIGHLIGHT_WARN_CLASS} {
-        outline-color: rgba(255, 198, 92, 0.78) !important;
+      .${QUESTION_SENSITIVE_CLASS} {
+        outline: 2px solid rgba(255, 102, 102, 0.55) !important;
+        box-shadow: 0 0 0 4px rgba(255, 102, 102, 0.08) !important;
+        border-radius: 14px !important;
       }
-      .${HIGHLIGHT_BLOCKED_CLASS} {
-        outline-color: rgba(255, 112, 112, 0.82) !important;
-      }
-      .${BADGE_CLASS} {
-        position: absolute !important;
-        top: 8px !important;
-        right: 8px !important;
-        z-index: 9999 !important;
-        background: #0f0f0f !important;
-        color: #fff !important;
-        border: 1px solid rgba(255,255,255,0.25) !important;
-        border-radius: 999px !important;
-        padding: 5px 9px !important;
-        font-size: 11px !important;
-        font-weight: 700 !important;
-        max-width: 220px !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-        white-space: nowrap !important;
+      .${GHOST_ANSWER_CLASS} {
+        margin-top: 8px !important;
+        color: rgba(60, 60, 60, 0.68) !important;
+        font-size: 15px !important;
+        line-height: 1.45 !important;
+        white-space: pre-wrap !important;
         pointer-events: none !important;
+        border-bottom: 1px dashed rgba(0, 0, 0, 0.18) !important;
+        padding-bottom: 6px !important;
+        max-width: 100% !important;
+        word-break: break-word !important;
+      }
+      .${OPTION_PREVIEW_CLASS} {
+        outline: 2px solid rgba(70, 255, 160, 0.85) !important;
+        box-shadow: 0 0 0 4px rgba(70, 255, 160, 0.12) !important;
+        border-radius: 999px !important;
+      }
+      .${OPTION_CHECKBOX_PREVIEW_CLASS} {
+        outline: 2px solid rgba(70, 255, 160, 0.85) !important;
+        box-shadow: 0 0 0 4px rgba(70, 255, 160, 0.12) !important;
+        border-radius: 10px !important;
       }
     `;
     document.documentElement.appendChild(style);
   }
 
-  function getHighlightState(question, answer) {
-    if (question.sensitive) {
-      return { className: HIGHLIGHT_BLOCKED_CLASS };
+  function findTextPreviewControl(item) {
+    const textarea = Array.from(item.querySelectorAll("textarea")).find(isVisible);
+
+    if (textarea) {
+      return textarea;
     }
 
-    if (answer.safeToFill === true && Number(answer.confidence) >= MIN_CONFIDENCE && !isEmptyAnswer(answer.answer)) {
-      return { className: HIGHLIGHT_SAFE_CLASS };
+    return getVisibleInputs(item).find((element) =>
+      ["text", "email", "tel", "number", "url", "search"].includes((element.type || "text").toLowerCase())
+    );
+  }
+
+  function getOptionPreviewTarget(element) {
+    const label = element.closest("label");
+
+    if (label && isVisible(label)) {
+      return label;
     }
 
-    return { className: HIGHLIGHT_WARN_CLASS };
+    const parent = element.parentElement;
+    return parent && isVisible(parent) ? parent : element;
   }
 
   function parseDateParts(value) {
@@ -473,23 +616,21 @@
     });
   }
 
-  function getElementLabels(element, numericOnly) {
-    const labels = [
+  function getElementLabels(element) {
+    return [
       element.getAttribute("data-value"),
       element.getAttribute("aria-label"),
+      element.getAttribute("title"),
+      element.value,
       element.innerText,
-      element.textContent
+      element.textContent,
+      element.closest("label")?.innerText,
+      element.parentElement?.innerText
     ].filter(Boolean);
-
-    if (!numericOnly) {
-      return labels;
-    }
-
-    return labels.map(extractNumber).filter(Boolean);
   }
 
   function extractNumber(value) {
-    const match = String(value || "").match(/(?:^|\b)(10|[1-9])(?:\b|$)/);
+    const match = String(value || "").match(/(?:^|\b)(10|[0-9])(?:\b|$)/);
     return match ? match[1] : "";
   }
 
@@ -516,23 +657,19 @@
     return !String(value || "").trim();
   }
 
-  function formatBadgeAnswer(value) {
-    const text = Array.isArray(value) ? value.join(", ") : String(value || "");
-    return text.length > 42 ? `${text.slice(0, 39)}...` : text;
-  }
-
   function closeOpenPopup(trigger) {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     trigger.blur();
   }
 
-  function normalizeComparable(text) {
-    return String(text || "")
+  function normalizeOptionText(value) {
+    return String(value || "")
       .replace(/\u00a0/g, " ")
-      .replace(/[ \t\r\n]+/g, " ")
       .trim()
-      .toLowerCase();
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/[.,!?;:]+$/g, "");
   }
 
   function isVisible(element) {
@@ -554,6 +691,10 @@
     fillSafeAnswers,
     fillAllPreviewed,
     previewAnswersOnForm,
-    clearFormHighlights
+    clearFormPreview,
+    clearFormHighlights: clearFormPreview,
+    applyGhostTextPreview,
+    applyChoicePreview,
+    findOptionElement
   };
 })();
